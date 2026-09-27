@@ -1,0 +1,659 @@
+{% extends "base.html" %} {% block title %}PrintOps SCADA — Reports{% endblock
+%} {% block extra_css %} /* ── Reports page layout
+──────────────────────────────────────────────── */ .reports-container {
+padding: 24px 32px; max-width: 1400px; margin: 0 auto; } /* ── Page header
+────────────────────────────────────────────────────────── */ .reports-header {
+display: flex; align-items: center; justify-content: space-between;
+margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid
+var(--border-base); } .reports-title { font-family: var(--font-display);
+font-size: 24px; font-weight: 600; color: var(--text-primary); text-transform:
+uppercase; letter-spacing: 0.05em; } .reports-subtitle { font-family:
+var(--font-display); font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+/* ── Report cards ─────────────────────────────────────────────────────── */
+.report-card { background: var(--bg-card); border: 1px solid var(--border-base);
+border-radius: var(--card-radius); padding: 20px 24px; margin-bottom: 16px; }
+.report-card-header { display: flex; align-items: center; gap: 10px;
+margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid
+var(--border-subtle); } .report-card-title { font-family: var(--font-display);
+font-size: 14px; font-weight: 600; color: var(--text-label); text-transform:
+uppercase; letter-spacing: 0.08em; } .report-card-icon { color: var(--cyan);
+font-size: 16px; } /* ── Form elements
+─────────────────────────────────────────────────────── */ .form-row { display:
+flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap; } .form-group { display:
+flex; flex-direction: column; gap: 6px; min-width: 200px; flex: 1; } .form-group
+label { font-family: var(--font-display); font-size: 11px; font-weight: 600;
+color: var(--text-label); text-transform: uppercase; letter-spacing: 0.05em; }
+.form-select, .form-input { font-family: var(--font-display); font-size: 13px;
+padding: 8px 12px; border: 1px solid var(--border-base); border-radius:
+var(--card-radius); background: var(--bg-panel); color: var(--text-primary);
+cursor: pointer; transition: border-color var(--transition-fast); }
+.form-select:hover, .form-input:hover { border-color: var(--cyan-dim); }
+.form-select:focus, .form-input:focus { outline: none; border-color:
+var(--cyan); } /* ── Report buttons
+────────────────────────────────────────────────────── */ .report-buttons {
+display: flex; gap: 12px; flex-wrap: wrap; } .report-btn { display: inline-flex;
+align-items: center; gap: 8px; padding: 10px 18px; font-family:
+var(--font-display); font-size: 12px; font-weight: 600; text-transform:
+uppercase; letter-spacing: 0.05em; border: 1px solid var(--border-base);
+border-radius: var(--card-radius); background: var(--bg-panel); color:
+var(--text-primary); cursor: pointer; transition: all var(--transition-fast); }
+.report-btn:hover { border-color: var(--cyan); background: var(--cyan-glow); }
+.report-btn:disabled { opacity: 0.5; cursor: not-allowed; } .report-btn i {
+font-size: 14px; } .report-btn.daily { border-left: 3px solid var(--cyan); }
+.report-btn.weekly { border-left: 3px solid var(--green); } .report-btn.monthly
+{ border-left: 3px solid var(--amber); } .report-btn.generate { background:
+var(--cyan); color: white; border-color: var(--cyan); }
+.report-btn.generate:hover { background: #005a8c; border-color: #005a8c; } /* ──
+Custom date range ────────────────────────────────────────────────── */
+.date-range-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap:
+wrap; } .date-input-group { display: flex; flex-direction: column; gap: 6px; }
+.date-input-group label { font-family: var(--font-display); font-size: 11px;
+font-weight: 600; color: var(--text-label); text-transform: uppercase;
+letter-spacing: 0.05em; } .date-input { font-family: var(--font-mono);
+font-size: 13px; padding: 8px 12px; border: 1px solid var(--border-base);
+border-radius: var(--card-radius); background: var(--bg-panel); color:
+var(--text-primary); cursor: pointer; } .date-input:focus { outline: none;
+border-color: var(--cyan); } /* ── Preview table
+─────────────────────────────────────────────────────── */ .preview-section {
+margin-top: 20px; } .preview-table { width: 100%; border-collapse: collapse;
+font-family: var(--font-display); font-size: 13px; } .preview-table th {
+background: var(--bg-row-alt); padding: 10px 12px; text-align: left;
+font-weight: 600; color: var(--text-label); text-transform: uppercase;
+font-size: 11px; letter-spacing: 0.05em; border-bottom: 1px solid
+var(--border-base); } .preview-table td { padding: 10px 12px; border-bottom: 1px
+solid var(--border-subtle); color: var(--text-primary); } .preview-table
+tr:hover { background: var(--bg-card-hover); } .preview-table .num {
+font-family: var(--font-mono); text-align: right; } /* ── Status badges
+────────────────────────────────────────────────────── */ .status-badge {
+display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px;
+font-family: var(--font-display); font-size: 11px; font-weight: 600;
+text-transform: uppercase; border-radius: 3px; } .status-badge.run { background:
+var(--green-glow); color: var(--green); } .status-badge.stop { background:
+var(--red-glow); color: var(--red); } /* ── Quick actions grid
+──────────────────────────────────────────────── */ .quick-actions { display:
+grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;
+margin-bottom: 16px; } .action-card { background: var(--bg-card); border: 1px
+solid var(--border-base); border-radius: var(--card-radius); padding: 16px 20px;
+transition: box-shadow var(--transition-fast); } .action-card:hover {
+box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); } .action-card-title { font-family:
+var(--font-display); font-size: 12px; font-weight: 600; color:
+var(--text-label); text-transform: uppercase; letter-spacing: 0.05em;
+margin-bottom: 12px; } /* ── Row count / summary bar
+─────────────────────────────────────────── */ .preview-summary { display: flex;
+align-items: center; justify-content: space-between; margin-bottom: 10px;
+padding: 8px 12px; background: var(--bg-row-alt); border-radius:
+var(--card-radius); font-family: var(--font-display); font-size: 12px; color:
+var(--text-dim); } .preview-summary .count { font-weight: 600; color:
+var(--cyan); } {% endblock %} {% block content %}
+<div class="reports-container">
+  <!-- Page Header -->
+  <div class="reports-header">
+    <div>
+      <div class="reports-title">
+        <i
+          class="bi bi-file-earmark-text"
+          style="margin-right: 10px; color: var(--cyan)"
+        ></i
+        >Reports
+      </div>
+      <div class="reports-subtitle">
+        Generate and download machine performance reports
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions Grid -->
+  <div class="quick-actions">
+    <!-- Machine Selection -->
+    <div class="action-card">
+      <div class="action-card-title">
+        <i class="bi bi-gear" style="margin-right: 6px; color: var(--cyan)"></i
+        >Select Machine
+      </div>
+      <div class="form-group" style="margin: 0">
+        <select class="form-select" id="machine-select">
+          <option value="">All Machines</option>
+          <!-- Populated dynamically from /api/machines -->
+        </select>
+      </div>
+    </div>
+
+    <!-- Energy Meter Selection -->
+    <div class="action-card">
+      <div class="action-card-title">
+        <i
+          class="bi bi-lightning-charge"
+          style="margin-right: 6px; color: var(--amber)"
+        ></i
+        >Energy Meter
+      </div>
+      <div class="form-group" style="margin: 0">
+        <select class="form-select" id="energy-meter-select">
+          <option value="">All Meters</option>
+          <!-- Populated dynamically from /api/machines -->
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Standard Reports -->
+  <div class="report-card">
+    <div class="report-card-header">
+      <i class="bi bi-calendar-check report-card-icon"></i>
+      <span class="report-card-title">Standard Reports</span>
+    </div>
+
+    <div class="report-buttons">
+      <button
+        class="report-btn daily"
+        id="btn-daily"
+        onclick="downloadReport('daily')"
+      >
+        <i class="bi bi-calendar-day"></i>
+        Daily Report
+      </button>
+      <button
+        class="report-btn weekly"
+        id="btn-weekly"
+        onclick="downloadReport('weekly')"
+      >
+        <i class="bi bi-calendar-week"></i>
+        Weekly Report
+      </button>
+      <button
+        class="report-btn monthly"
+        id="btn-monthly"
+        onclick="downloadReport('monthly')"
+      >
+        <i class="bi bi-calendar-month"></i>
+        Monthly Report
+      </button>
+    </div>
+  </div>
+
+  <!-- Custom Date Range -->
+  <div class="report-card">
+    <div class="report-card-header">
+      <i class="bi bi-calendar-range report-card-icon"></i>
+      <span class="report-card-title">Custom Date Range Report</span>
+    </div>
+
+    <div class="date-range-row">
+      <div class="date-input-group">
+        <label>Start Date</label>
+        <input type="date" class="date-input" id="start-date" />
+      </div>
+      <div class="date-input-group">
+        <label>End Date</label>
+        <input type="date" class="date-input" id="end-date" />
+      </div>
+      <button
+        class="report-btn generate"
+        id="btn-preview"
+        onclick="loadPreviewTable()"
+      >
+        <i class="bi bi-eye"></i>
+        Preview
+      </button>
+      <button
+        class="report-btn generate"
+        id="btn-custom-download"
+        onclick="downloadCustomReport()"
+      >
+        <i class="bi bi-download"></i>
+        Download CSV
+      </button>
+    </div>
+
+    <!-- Preview Table -->
+    <div class="preview-section">
+      <div class="preview-summary" id="preview-summary" style="display: none">
+        <span>Showing <span class="count" id="row-count">0</span> records</span>
+        <span id="date-range-label"></span>
+      </div>
+      <table class="preview-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Machine</th>
+            <th>Status</th>
+            <th class="num">Run Hours</th>
+            <th class="num">Production (m)</th>
+            <th class="num">Energy (kWh)</th>
+            <th class="num">kWh/m</th>
+          </tr>
+        </thead>
+        <tbody id="preview-body">
+          <tr>
+            <td
+              colspan="7"
+              style="text-align: center; color: var(--text-dim); padding: 16px"
+            >
+              Select a date range and click Preview to load data.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Energy Reports -->
+  <div class="report-card">
+    <div class="report-card-header">
+      <i
+        class="bi bi-lightning-charge report-card-icon"
+        style="color: var(--amber)"
+      ></i>
+      <span class="report-card-title">Energy Reports (Shift-Level)</span>
+    </div>
+
+    <div class="report-buttons">
+      <button
+        class="report-btn daily"
+        id="btn-energy-daily"
+        onclick="downloadEnergyReport('daily')"
+      >
+        <i class="bi bi-calendar-day"></i>
+        Daily Energy
+      </button>
+      <button
+        class="report-btn weekly"
+        id="btn-energy-weekly"
+        onclick="downloadEnergyReport('weekly')"
+      >
+        <i class="bi bi-calendar-week"></i>
+        Weekly Energy
+      </button>
+      <button
+        class="report-btn monthly"
+        id="btn-energy-monthly"
+        onclick="downloadEnergyReport('monthly')"
+      >
+        <i class="bi bi-calendar-month"></i>
+        Monthly Energy
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  "use strict";
+
+  const API_BASE = "/api";
+
+  /* ===============================
+   HELPERS
+================================= */
+
+  function getMachineKey() {
+    return document.getElementById("machine-select")?.value || "";
+  }
+
+  function safeNumber(val, digits = 2) {
+    const num = parseFloat(val || 0);
+    return isNaN(num) ? "0.00" : num.toFixed(digits);
+  }
+
+  function formatInt(val) {
+    return parseInt(val || 0, 10).toLocaleString("en-GB");
+  }
+
+  function todayISO() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  /** Return YYYY-MM-DD offset from today */
+  function dateOffset(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().split("T")[0];
+  }
+
+  function setDefaultDates() {
+    const endEl = document.getElementById("end-date");
+    const startEl = document.getElementById("start-date");
+
+    if (endEl && !endEl.value) endEl.value = todayISO();
+    if (startEl && !startEl.value) startEl.value = dateOffset(-7);
+  }
+
+  /* ===============================
+   MACHINE LIST (DYNAMIC)
+================================= */
+
+  async function loadMachineList() {
+    try {
+      const res = await fetch(`${API_BASE}/machines`);
+      if (!res.ok) return;
+
+      const machines = await res.json();
+      const machineSelect = document.getElementById("machine-select");
+      const energySelect = document.getElementById("energy-meter-select");
+
+      machines.forEach((m) => {
+        // Machine dropdown
+        const opt1 = document.createElement("option");
+        opt1.value = m.machine_key;
+        opt1.textContent = m.machine_name;
+        machineSelect.appendChild(opt1);
+
+        // Energy meter dropdown
+        const opt2 = document.createElement("option");
+        opt2.value = m.machine_key;
+        opt2.textContent = m.machine_name;
+        energySelect.appendChild(opt2);
+      });
+    } catch (err) {
+      console.error("Failed to load machines:", err);
+    }
+  }
+
+  /* ===============================
+   FETCH REPORT DATA (POSTGRESQL)
+================================= */
+
+  async function fetchReportRange(startDate, endDate, machineKey) {
+    const params = new URLSearchParams({ start: startDate, end: endDate });
+    if (machineKey) params.set("machine_key", machineKey);
+
+    const res = await fetch(`${API_BASE}/report/range?${params}`);
+    if (!res.ok) throw new Error(`Report API error: ${res.status}`);
+    return res.json();
+  }
+
+  async function fetchReportDaily(machineKey) {
+    const params = new URLSearchParams();
+    if (machineKey) params.set("machine_key", machineKey);
+
+    const res = await fetch(`${API_BASE}/report/daily?${params}`);
+    if (!res.ok) throw new Error(`Daily report API error: ${res.status}`);
+    return res.json();
+  }
+
+  async function fetchShiftHistory(startDate, endDate, machineKey) {
+    const params = new URLSearchParams({ start: startDate, end: endDate });
+    if (machineKey) params.set("machine_key", machineKey);
+
+    const res = await fetch(`${API_BASE}/report/shift-history?${params}`);
+    if (!res.ok) throw new Error(`Shift report API error: ${res.status}`);
+    return res.json();
+  }
+
+  /* ===============================
+   CSV BUILDERS
+================================= */
+
+  function buildDailyCSV(rows) {
+    let csv = [
+      "Date,Machine,Run Hours,Production (m),Energy (kWh),kWh/m,Status",
+    ];
+
+    rows.forEach((r) => {
+      csv.push(
+        `${r.date},${r.machine},${r.run_hours},${r.production_meters},${r.energy_kwh},${r.energy_per_meter},${r.status}`,
+      );
+    });
+
+    return csv.join("\n");
+  }
+
+  function buildShiftCSV(rows) {
+    let csv = [
+      "Date,Machine,Shift,Run Hours,Production (m),Energy (kWh),kWh/m,Speed (m/min)",
+    ];
+
+    rows.forEach((r) => {
+      csv.push(
+        `${r.date},${r.machine},${r.shift},${r.run_hours},${r.production_meters},${r.energy_kwh},${r.energy_per_meter},${r.machine_speed_mpm}`,
+      );
+    });
+
+    return csv.join("\n");
+  }
+
+  /* ===============================
+   DOWNLOAD CSV FILE
+================================= */
+
+  function downloadCSV(data, filename) {
+    const blob = new Blob([data], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    URL.revokeObjectURL(url);
+  }
+
+  /* ===============================
+   REPORT DOWNLOAD ACTIONS
+================================= */
+
+  async function downloadReport(type) {
+    const machine = getMachineKey();
+    const label = machine || "all_machines";
+    const today = todayISO();
+
+    try {
+      let startDate, endDate;
+
+      if (type === "daily") {
+        // Today only
+        const data = await fetchReportDaily(machine);
+        if (!data.rows?.length) {
+          alert("No data for today.");
+          return;
+        }
+        downloadCSV(buildDailyCSV(data.rows), `${label}_daily_${today}.csv`);
+        return;
+      }
+
+      if (type === "weekly") {
+        startDate = dateOffset(-6);
+        endDate = today;
+      }
+
+      if (type === "monthly") {
+        startDate = dateOffset(-29);
+        endDate = today;
+      }
+
+      const data = await fetchReportRange(startDate, endDate, machine);
+
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (!data.rows?.length) {
+        alert("No data in selected range.");
+        return;
+      }
+
+      downloadCSV(buildDailyCSV(data.rows), `${label}_${type}_${today}.csv`);
+    } catch (e) {
+      console.error(e);
+      alert("Report generation failed: " + e.message);
+    }
+  }
+
+  async function downloadEnergyReport(type) {
+    const machine = getMachineKey();
+    const label = machine || "all_machines";
+    const today = todayISO();
+
+    let startDate, endDate;
+
+    if (type === "daily") {
+      startDate = today;
+      endDate = today;
+    } else if (type === "weekly") {
+      startDate = dateOffset(-6);
+      endDate = today;
+    } else if (type === "monthly") {
+      startDate = dateOffset(-29);
+      endDate = today;
+    }
+
+    try {
+      const data = await fetchShiftHistory(startDate, endDate, machine);
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (!data.rows?.length) {
+        alert("No shift data in selected range.");
+        return;
+      }
+
+      downloadCSV(
+        buildShiftCSV(data.rows),
+        `${label}_energy_${type}_${today}.csv`,
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Shift report failed: " + e.message);
+    }
+  }
+
+  async function downloadCustomReport() {
+    const machine = getMachineKey();
+    const label = machine || "all_machines";
+
+    const start = document.getElementById("start-date")?.value;
+    const end = document.getElementById("end-date")?.value;
+
+    if (!start || !end) {
+      alert("Please select date range");
+      return;
+    }
+
+    try {
+      const data = await fetchReportRange(start, end, machine);
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      if (!data.rows?.length) {
+        alert("No data in selected range.");
+        return;
+      }
+
+      downloadCSV(
+        buildDailyCSV(data.rows),
+        `${label}_custom_${start}_${end}.csv`,
+      );
+    } catch (e) {
+      console.error(e);
+      alert("Custom report failed: " + e.message);
+    }
+  }
+
+  /* ===============================
+   PREVIEW TABLE (POSTGRESQL)
+================================= */
+
+  async function loadPreviewTable() {
+    const machine = getMachineKey();
+
+    const start = document.getElementById("start-date")?.value;
+    const end = document.getElementById("end-date")?.value;
+
+    const tbody = document.getElementById("preview-body");
+    const summaryEl = document.getElementById("preview-summary");
+    if (!tbody) return;
+
+    if (!start || !end) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-dim); padding: 16px;">Please select a date range.</td></tr>`;
+      if (summaryEl) summaryEl.style.display = "none";
+      return;
+    }
+
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding: 16px;"><i class="bi bi-arrow-clockwise" style="animation: spin 1s linear infinite;"></i> Loading from PostgreSQL...</td></tr>`;
+
+    try {
+      const data = await fetchReportRange(start, end, machine);
+
+      if (data.error) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">${data.error}</td></tr>`;
+        if (summaryEl) summaryEl.style.display = "none";
+        return;
+      }
+
+      if (!data.rows?.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: var(--text-dim); padding: 16px;">No data found for selected range.</td></tr>`;
+        if (summaryEl) summaryEl.style.display = "none";
+        return;
+      }
+
+      let rows = "";
+
+      data.rows.forEach((r) => {
+        const statusClass = r.status === "RUN" ? "run" : "stop";
+        const statusIcon = r.status === "RUN" ? "bi-play-fill" : "bi-stop-fill";
+
+        rows += `
+        <tr>
+          <td>${r.date}</td>
+          <td>${r.machine}</td>
+          <td><span class="status-badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${r.status}</span></td>
+          <td class="num">${safeNumber(r.run_hours, 1)}</td>
+          <td class="num">${formatInt(r.production_meters)}</td>
+          <td class="num">${safeNumber(r.energy_kwh, 1)}</td>
+          <td class="num">${safeNumber(r.energy_per_meter, 4)}</td>
+        </tr>
+      `;
+      });
+
+      tbody.innerHTML = rows;
+
+      // Update summary bar
+      if (summaryEl) {
+        summaryEl.style.display = "flex";
+        document.getElementById("row-count").textContent = data.rows.length;
+        document.getElementById("date-range-label").textContent =
+          `${start} → ${end}`;
+      }
+    } catch (err) {
+      console.error(err);
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Error loading data: ${err.message}</td></tr>`;
+      if (summaryEl) summaryEl.style.display = "none";
+    }
+  }
+
+  /* ===============================
+   INIT EVENTS (SAFE)
+================================= */
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setDefaultDates();
+    loadMachineList();
+
+    // Do NOT auto-load preview — wait for user to click Preview
+    document
+      .getElementById("machine-select")
+      ?.addEventListener("change", () => {
+        // If preview already has data, reload it
+        const tbody = document.getElementById("preview-body");
+        if (tbody && tbody.rows.length > 1) {
+          loadPreviewTable();
+        }
+      });
+  });
+</script>
+
+<style>
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+</style>
+{% endblock %}

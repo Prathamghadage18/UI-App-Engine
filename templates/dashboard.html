@@ -1,0 +1,1687 @@
+{% extends "base.html" %}
+
+{% block title %}PrintOps SCADA — Hutamaki Print Line{% endblock %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+SCADA PAGE CSS — scoped to this template only
+All token variables come from base.html :root
+═══════════════════════════════════════════════════════════════════════════ #}
+{% block extra_css %}
+
+/* ── SCADA main grid ─────────────────────────────────────────────────────
+Three columns: machine-A | 2px divider | machine-B
+Height = 100% of .scada-main (viewport minus header+footer)
+──────────────────────────────────────────────────────────────────────── */
+.scada-grid {
+display: grid;
+grid-template-columns: 1fr var(--panel-gap) 1fr;
+width: 100%;
+height: 100%;
+overflow: hidden;
+}
+
+.panel-divider {
+width: var(--panel-gap);
+background: var(--border-divider);
+position: relative;
+}
+
+/* Glowing midline on divider */
+.panel-divider::before {
+content: '';
+position: absolute;
+top: 10%;
+bottom: 10%;
+left: 0;
+width: 1px;
+background: linear-gradient(
+180deg,
+transparent 0%,
+var(--cyan-dim) 30%,
+var(--cyan-dim) 70%,
+transparent 100%
+);
+opacity: 0.6;
+}
+
+/* ── Machine panel — flex column, fills full height ───────────────────── */
+.machine-panel {
+display: flex;
+flex-direction: column;
+height: 100%;
+overflow: hidden;
+padding: 12px 18px 10px;
+gap: var(--section-gap);
+}
+
+
+/* ── Machine header row ──────────────────────────────────────────────── */
+.machine-header {
+flex-shrink: 0;
+display: flex;
+align-items: center;
+justify-content: center;
+padding-bottom: 10px;
+border-bottom: 1px solid var(--border-bright);
+}
+
+.machine-id-block {
+display: flex;
+flex-direction: column;
+gap: 2px;
+}
+
+.machine-name {
+font-size: 24px;
+font-weight: 900;
+letter-spacing: 0.12em;
+color: var(--text-value);
+text-transform: uppercase;
+line-height: 1;
+}
+
+.machine-sub {
+font-family: var(--font-mono);
+font-size: 10px;
+color: var(--text-dim);
+letter-spacing: 0.1em;
+}
+
+.machine-header-right {
+display: flex;
+align-items: center;
+gap: 12px;
+}
+
+/* Last-seen timestamp in machine header */
+.last-seen {
+font-family: var(--font-mono);
+font-size: 10px;
+color: var(--text-dim);
+letter-spacing: 0.08em;
+}
+
+.last-seen span { color: var(--text-secondary); }
+
+
+/* ── Section A + C + D — KPI row (5 blocks) ────────────────────────── */
+.kpi-row {
+flex-shrink: 0;
+display: grid;
+grid-template-columns: 1.2fr 1fr 1fr 1fr 1.2fr;
+gap: 8px;
+}
+
+.kpi-block {
+background: var(--bg-card);
+border: 1px solid var(--border-base);
+border-radius: var(--card-radius);
+padding: var(--card-pad-y) var(--card-pad-x);
+position: relative;
+overflow: hidden;
+display: flex;
+flex-direction: column;
+gap: 3px;
+transition: border-color var(--transition-fast);
+}
+
+/* Accent variant — cyan top-border + glow */
+.kpi-block.kpi-accent {
+border-color: var(--cyan-dim);
+background: rgba(0, 119, 182, 0.04);
+}
+
+.kpi-block.kpi-accent::before {
+content: '';
+position: absolute;
+top: 0; left: 0; right: 0;
+height: 2px;
+background: linear-gradient(90deg, var(--cyan) 0%, transparent 80%);
+}
+
+.kpi-label {
+font-size: 17px;
+font-weight: 800;
+letter-spacing: 0.18em;
+color: var(--text-label);
+text-transform: uppercase;
+}
+
+.kpi-value {
+font-family: var(--font-mono);
+font-size: 28px;
+font-weight: 600;
+color: var(--text-value);
+line-height: 1;
+}
+
+.kpi-value .kpi-unit {
+font-size: 19px;
+color: var(--text-dim);
+margin-left: 2px;
+}
+
+.kpi-value.kpi-cyan { color: var(--cyan); }
+.kpi-value.kpi-green { color: var(--green); }
+.kpi-value.kpi-amber { color: var(--amber); }
+.kpi-value.kpi-red { color: var(--red); }
+
+.kpi-sub {
+font-size: 10px;
+color: var(--text-dim);
+letter-spacing: 0.06em;
+}
+
+/* Utilisation progress bar inside KPI block */
+.kpi-progress {
+margin-top: 4px;
+}
+
+.kpi-progress .bar-track {
+height: 4px;
+background: var(--border-base);
+border-radius: 2px;
+overflow: hidden;
+}
+
+.kpi-progress .bar-fill {
+height: 100%;
+border-radius: 2px;
+transition: width 0.7s ease;
+}
+
+/* Energy-per-meter — efficiency rating indicator */
+.eff-rating {
+display: flex;
+align-items: center;
+gap: 4px;
+margin-top: 2px;
+}
+
+.eff-dot {
+width: 6px;
+height: 6px;
+border-radius: 50%;
+}
+
+.eff-label {
+font-size: 9px;
+color: var(--text-dim);
+letter-spacing: 0.08em;
+}
+
+
+/* Stopped-at timestamp in production cell — only visible when machine is STOP */
+.prod-stopped-at {
+display: none;
+font-size: 11px;
+font-weight: 600;
+color: var(--red);
+letter-spacing: 0.04em;
+margin-right: 4px;
+font-family: var(--font-mono);
+}
+
+/* ── Section B — Shift performance table ────────────────────────────── */
+.shift-section {
+flex-shrink: 0;
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+
+.shift-table-wrap {
+overflow: hidden;
+}
+
+.shift-table {
+width: 100%;
+border-collapse: collapse;
+table-layout: fixed;
+}
+
+.shift-table thead tr {
+background: transparent;
+}
+
+.shift-table th {
+padding: 5px 8px;
+font-size:20px;
+font-weight: 900;
+letter-spacing: 0.16em;
+color: var(--text-label);
+
+text-align: left;
+border-bottom: 1px solid var(--border-subtle);
+}
+
+.shift-table th:not(:first-child) {
+text-align: right;
+}
+
+.shift-table td {
+padding: 8px 8px;
+border-bottom: 1px solid var(--border-subtle);
+color: var(--text-secondary);
+font-weight: 800;
+vertical-align: middle;
+}
+
+.shift-table td:not(:first-child) {
+text-align: right;
+font-family: var(--font-mono);
+font-size: 29px;
+font-weight: 900;
+letter-spacing: 0.08em;
+}
+
+/* Shift name column */
+.shift-table td.td-shift-name {
+font-weight: 700;
+font-size: 25px;
+letter-spacing: 0.08em;
+color: #000000;
+}
+
+.shift-time-badge {
+display: inline-block;
+font-family: var(--font-mono);
+font-size: 9px;
+color: var(--text-dim);
+letter-spacing: 0.06em;
+margin-left: 5px;
+}
+
+/* Alternating row tint */
+.shift-table tbody tr:nth-child(even) td {
+background: var(--bg-row-alt);
+}
+
+/* Underperforming row — no background, just text color */
+.shift-table tbody tr.row-worst td {
+color: var(--text-secondary);
+}
+
+.shift-table tbody tr.row-worst td.td-shift-name {
+color: #000000;
+}
+
+/* Utilisation cell — mini bar + percent */
+.util-cell {
+display: flex;
+align-items: center;
+justify-content: flex-end;
+gap: 6px;
+}
+
+.mini-bar-track {
+width: 52px;
+height: 4px;
+background: var(--border-base);
+border-radius: 2px;
+overflow: hidden;
+flex-shrink: 0;
+}
+
+.mini-bar-fill {
+height: 100%;
+border-radius: 2px;
+transition: width var(--transition-mid);
+}
+
+/* Performance tag pill */
+.tag-pill {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+font-size: 8px;
+font-weight: 600;
+letter-spacing: 0.14em;
+text-transform: uppercase;
+padding: 2px 6px;
+border-radius: 2px;
+}
+
+.tag-worst {
+color: var(--red);
+background: rgba(198, 40, 40, 0.08);
+border: 1px solid rgba(198, 40, 40, 0.25);
+}
+
+.tag-best {
+color: var(--green);
+background: rgba(46, 125, 50, 0.08);
+border: 1px solid rgba(46, 125, 50, 0.25);
+}
+
+/* Shift highlight row — current active shift (green shade) */
+.shift-table tbody tr.row-active td {
+background: rgba(46, 125, 50, 0.08);
+border-left: 2px solid var(--green);
+}
+
+.shift-table tbody tr.row-active td {
+padding-top: 14px;
+padding-bottom: 14px;
+}
+
+.shift-table tbody tr.row-active td:not(:first-child) {
+font-size: 30px;
+font-weight: 900;
+}
+
+.shift-table tbody tr.row-active td.td-shift-name {
+color: #000000;
+font-size: 30px;
+font-weight: 800;
+}
+
+.shift-table tbody tr.row-active .util-cell span {
+font-size: 26px !important;
+font-weight: 900 !important;
+}
+
+
+/* ── Section E — Weekly trend charts ────────────────────────────────── */
+.charts-section {
+flex: 1; /* fills remaining panel height */
+min-height: 120px; /* ensure charts always visible */
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+
+.charts-grid {
+flex: 1;
+min-height: 0;
+display: grid;
+grid-template-columns: 1fr 1fr 1fr 1fr;
+gap: 8px;
+}
+
+.chart-card {
+background: var(--bg-card);
+border: 1px solid var(--border-base);
+border-radius: var(--card-radius);
+padding: 8px 10px;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+min-height: 0;
+}
+
+.chart-label {
+font-size: 18px;
+font-weight: 900;
+letter-spacing: 0.18em;
+color: var(--text-label);
+flex-shrink: 0;
+margin-bottom: 4px;
+display: flex;
+align-items: center;
+justify-content: space-between;
+}
+
+.chart-label .chart-latest {
+font-family: var(--font-mono);
+font-size: 13px;
+color: var(--text-secondary);
+letter-spacing: 0.05em;
+font-weight: 700;
+}
+
+.chart-canvas-wrap {
+flex: 1;
+min-height: 0;
+position: relative;
+}
+
+.chart-canvas-wrap canvas {
+position: absolute;
+inset: 0;
+width: 100% !important;
+height: 100% !important;
+}
+
+/* ── Desktop fit and responsive safeguards ─────────────────────────────── */
+@media (min-width: 1201px) {
+  .machine-panel {
+    min-width: 0;
+  }
+
+  .kpi-block {
+    min-width: 0;
+    min-height: 86px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .kpi-label {
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .kpi-value {
+    font-size: 31px;
+    white-space: nowrap;
+  }
+
+  .shift-table th,
+  .shift-table td {
+    overflow-wrap: anywhere;
+  }
+
+  .shift-table th {
+    font-size: 17px;
+    line-height: 1.05;
+  }
+
+  .shift-table td {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .shift-table tbody tr.row-active td {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .charts-section {
+    min-height: 96px;
+  }
+
+  .chart-card {
+    min-width: 0;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .chart-label,
+  .chart-label .chart-latest {
+    min-width: 0;
+  }
+
+  .chart-label {
+    font-size: 15px;
+    line-height: 1.05;
+  }
+
+  .chart-label .chart-latest {
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+}
+
+/* Narrow layouts may grow vertically; the desktop no-scroll contract ends here. */
+@media (max-width: 1200px) {
+  html,
+  body {
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .scada-shell {
+    min-height: 100vh;
+    height: auto;
+    overflow: visible;
+  }
+
+  .scada-main {
+    overflow: visible;
+  }
+
+  .scada-grid {
+    height: auto;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .panel-divider {
+    display: none;
+  }
+
+  .machine-panel {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .charts-section {
+    flex: none;
+    min-height: 220px;
+  }
+
+  .charts-grid {
+    min-height: 190px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .machine-panel {
+    padding: 10px 12px;
+  }
+
+  .machine-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .machine-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kpi-label {
+    font-size: 14px;
+    line-height: 1.1;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+  }
+
+  .shift-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .shift-table {
+    min-width: 620px;
+  }
+
+  .shift-table th {
+    font-size: 13px;
+  }
+
+  .shift-table td,
+  .shift-table td:not(:first-child),
+  .shift-table td.td-shift-name {
+    font-size: 18px;
+  }
+
+  .shift-table tbody tr.row-active td:not(:first-child),
+  .shift-table tbody tr.row-active td.td-shift-name {
+    font-size: 21px;
+  }
+
+  .shift-time-badge {
+    font-size: 13px;
+  }
+
+  .charts-section {
+    min-height: 260px;
+  }
+
+  .charts-grid {
+    min-height: 230px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+{% endblock %}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+CONTENT BLOCK — the full SCADA layout
+Static mock data used for frontend development.
+Backend integration points marked with: {# BACKEND: description #}
+═══════════════════════════════════════════════════════════════════════════ #}
+{% block content %}
+
+{#
+MOCK DATA — replace with Jinja2 variables from FastAPI context:
+machines = list of AssetConfig objects
+machine_data = { machine_id: { snapshot, shifts, weekly } }
+
+For frontend dev, we hard-code two machines below.
+When backend is ready, the structure maps 1:1.
+#}
+
+<div class="scada-grid">
+
+  {# ════════════════════════════════════════════════════════════════
+  MACHINE 1 — Gallus EM 280
+  BACKEND: {% for machine in machines %} loop starts here
+  ════════════════════════════════════════════════════════════════ #}
+  <section class="machine-panel reveal reveal-2" id="panel-gallus_em280">
+
+    {# ── Machine header ─────────────────────────────────────────── #}
+    <div class="machine-header">
+      <div class="machine-id-block">
+        <span class="machine-name">
+          {# BACKEND: {{ machine.machine_name }} #}
+          Gallus EM 280
+        </span>
+
+      </div>
+
+      <div class="machine-header-right">
+        <span class="last-seen">
+          Last msg: <span id="last-seen-gallus">14:31:22</span>
+          {# BACKEND: populated by JS Fetch from /api/machines/{id}/status #}
+        </span>
+
+        {# BACKEND: class changes based on snapshot.machine_status #}
+        <span class="badge-stop" id="status-gallus_em280">
+          STOP
+        </span>
+      </div>
+    </div>
+
+
+    {# ── Section A + C + D — KPI row ─────────────────────────────── #}
+    <div class="section-label" style="margin-bottom: 8px; font-size: small;">
+      24-Hours Snapshot
+    </div>
+    <div class="kpi-row reveal reveal-3">
+
+      {# --- Utilisation (Section C) --- #}
+      <div class="kpi-block kpi-accent" data-tip="Run Hours ÷ 24 hours">
+        <div class="kpi-label">Utilisation</div>
+        <div class="kpi-value kpi-cyan" id="util-gallus_em280">
+          {# BACKEND: {{ snap.utilization_pct }} #}
+          78.7<span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-progress">
+          <div class="bar-track">
+            <div class="bar-fill bar-fill-cyan" id="util-bar-gallus_em280" style="width: 78.7%">
+            </div>
+          </div>
+        </div>
+        <div class="kpi-sub">18.9h of 24h</div>
+      </div>
+
+      {# --- Run Hours --- #}
+      <div class="kpi-block">
+        <div class="kpi-label">Total Run Hours</div>
+        <div class="kpi-value" id="runhours-gallus_em280">
+          {# BACKEND: {{ snap.total_run_hours }} #}
+          18.9<span class="kpi-unit">h</span>
+        </div>
+        <div class="kpi-sub">Idle: 5.1h</div>
+      </div>
+
+      {# --- Production (Section A) --- #}
+      <div class="kpi-block">
+        <div class="kpi-label">Total Production</div>
+        <div class="kpi-value" id="prod-gallus_em280">
+          {# BACKEND: {{ snap.total_production_m }} #}
+          2,885<span class="kpi-unit">m</span>
+        </div>
+        <div class="kpi-sub">Reg 41001 Δ</div>
+      </div>
+
+      {# --- Active Energy (Section D) --- #}
+      <div class="kpi-block">
+        <div class="kpi-label">Active Energy Consumption</div>
+        <div class="kpi-value" id="energy-gallus_em280">
+          {# BACKEND: {{ snap.total_energy_kwh }} #}
+          36.8<span class="kpi-unit">kWh</span>
+        </div>
+        <div class="kpi-sub">Reg 40001 Δ</div>
+      </div>
+
+      {# --- Energy per Meter (Section D) --- #}
+      <div class="kpi-block kpi-accent" data-tip="Efficiency index — lower is better">
+        <div class="kpi-label">Energy / Meter</div>
+        <div class="kpi-value kpi-cyan" id="epm-gallus_em280">
+          {# BACKEND: {{ snap.energy_per_m }} #}
+          12.76<span class="kpi-unit" style="font-size:11px"> kWh/m</span>
+        </div>
+        <div class="eff-rating">
+          {# JS updates dot colour: green good, amber mid, red poor #}
+          <span class="eff-dot" id="eff-dot-gallus_em280" style="background: var(--green)"></span>
+          <span class="eff-label" id="eff-label-gallus_em280">Efficient</span>
+        </div>
+      </div>
+
+    </div>{# /.kpi-row #}
+
+
+    {# ── Section B — Shift Performance ───────────────────────────── #}
+    <div class="shift-section reveal reveal-4">
+
+      <div class="section-label" style="font-size: small;">
+        Shift Performance — Today
+        {# BACKEND: — {{ today }} #}
+      </div>
+
+      <div class="shift-table-wrap">
+        <table class="shift-table">
+          <thead>
+            <tr>
+              <th style="width:21%">Shift</th>
+              <th style="width:16%">Run h</th>
+              <th style="width:21%">Production m</th>
+              <th style="width:14%">Energy kWh</th>
+              <th style="width:14%">Speed m/min</th>
+              <th style="width:14%">kWh/m</th>
+            </tr>
+          </thead>
+
+          {# BACKEND: tbody id used by JS to re-render rows on refresh #}
+          <tbody id="shifts-gallus_em280">
+
+            {# ── Shift 1 — 07:00–15:00 ── #}
+            {# BACKEND: {% for s in shifts %} — row-worst/row-active classes set by JS #}
+            <tr class="row-active">
+              {# row-active = currently running shift (set dynamically by JS) #}
+              <td class="td-shift-name">
+                Shift-1
+                <span class="shift-time-badge">07–15</span>
+              </td>
+              <td>6.5</td>
+              <td style="color: var(--cyan)">
+                <span class="prod-stopped-at" style="display:none"></span>985
+              </td>
+              <td>12.6</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  45.2
+                </td>
+              <td style="color: var(--text-dim)">12.79</td>
+            </tr>
+
+            {# ── Shift 2 — 15:00–23:00 ── #}
+            <tr>
+              <td class="td-shift-name">
+                Shift-2
+                <span class="shift-time-badge">15–23</span>
+                <span class="tag-pill tag-best">
+                  <i class="bi bi-arrow-up"></i>Best
+                </span>
+              </td>
+              <td>7.2</td>
+              <td style="color: var(--cyan)">
+                <span class="prod-stopped-at" style="display:none"></span>1,120
+              </td>
+              <td>13.8</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  52.1
+                </td>
+              <td style="color: var(--text-dim)">12.32</td>
+            </tr>
+
+            {# ── Shift 3 — 23:00–07:00 (crosses midnight) ── #}
+            <tr class="row-worst">
+              <td class="td-shift-name">
+                Shift-3
+                <span class="shift-time-badge">23–07</span>
+                <span class="tag-pill tag-worst">
+                  <i class="bi bi-arrow-down"></i>Low
+                </span>
+              </td>
+              <td>5.2</td>
+              <td>
+                <span class="prod-stopped-at" style="display:none"></span>780
+              </td>
+              <td>10.4</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  38.5
+                </td>
+              <td style="color: var(--text-dim)">13.33</td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>{# /.shift-section #}
+
+
+    {# ── Section E — Weekly Trend (4 mini-charts) ────────────────── #}
+    <div class="charts-section reveal reveal-5">
+
+      <div class="section-label" style="font-size: small;">
+        7-Days Trend
+        <span style="margin-left:auto; font-family: var(--font-mono);
+                     font-size:9px; color: var(--text-dim);">
+          Feb 20 – Feb 26
+        </span>
+      </div>
+
+      <div class="charts-grid">
+
+        {# Production bar chart #}
+        <div class="chart-card">
+          <div class="chart-label">
+            Total Production
+            <span class="chart-latest" id="prod-latest-gallus">2,885 m</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-prod-gallus_em280"></canvas>
+          </div>
+        </div>
+
+        {# Energy line chart #}
+        <div class="chart-card">
+          <div class="chart-label">
+            Energy
+            <span class="chart-latest" id="energy-latest-gallus">36.8 kWh</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-energy-gallus_em280"></canvas>
+          </div>
+        </div>
+
+        {# Run Hours line chart #}
+        <div class="chart-card">
+          <div class="chart-label">
+            Total Run Hours
+            <span class="chart-latest" id="hours-latest-gallus">18.9 h</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-hours-gallus_em280"></canvas>
+          </div>
+        </div>
+
+        {# Energy-per-meter trend line #}
+        <div class="chart-card">
+          <div class="chart-label">
+            kWh/m
+            <span class="chart-latest" id="epm-latest-gallus">12.76</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-epm-gallus_em280"></canvas>
+          </div>
+        </div>
+
+      </div>{# /.charts-grid #}
+    </div>{# /.charts-section #}
+
+  </section>{# /.machine-panel — Gallus #}
+
+
+  {# ════════════════════════════════════════════════════════════════
+  PANEL DIVIDER
+  ════════════════════════════════════════════════════════════════ #}
+  <div class="panel-divider"></div>
+
+
+  {# ════════════════════════════════════════════════════════════════
+  MACHINE 2 — BOBST M5
+  ════════════════════════════════════════════════════════════════ #}
+  <section class="machine-panel reveal reveal-2" id="panel-bobst_m5">
+
+    <div class="machine-header">
+      <div class="machine-id-block">
+        <span class="machine-name">BOBST M5</span>
+
+      </div>
+
+      <div class="machine-header-right">
+        <span class="last-seen">
+          Last msg: <span id="last-seen-bobst">14:28:47</span>
+        </span>
+
+        <span class="badge-stop" id="status-bobst_m5">
+          STOP
+        </span>
+      </div>
+    </div>
+
+
+    <div class="section-label" style="margin-bottom: 8px; font-size: small;">
+      24-Hours Snapshot
+    </div>
+    <div class="kpi-row reveal reveal-3">
+
+      <div class="kpi-block kpi-accent" data-tip="Run Hours ÷ 24 hours">
+        <div class="kpi-label">Utilisation</div>
+        <div class="kpi-value kpi-amber" id="util-bobst_m5">
+          54.2<span class="kpi-unit">%</span>
+        </div>
+        <div class="kpi-progress">
+          <div class="bar-track">
+            <div class="bar-fill bar-fill-amber" id="util-bar-bobst_m5" style="width: 54.2%">
+            </div>
+          </div>
+        </div>
+        <div class="kpi-sub">13.0h of 24h</div>
+      </div>
+
+      <div class="kpi-block">
+        <div class="kpi-label">Total Run Hours</div>
+        <div class="kpi-value" id="runhours-bobst_m5">
+          13.0<span class="kpi-unit">h</span>
+        </div>
+        <div class="kpi-sub">Idle: 11.0h</div>
+      </div>
+
+      <div class="kpi-block">
+        <div class="kpi-label">Total Production</div>
+        <div class="kpi-value" id="prod-bobst_m5">
+          1,940<span class="kpi-unit">m</span>
+        </div>
+        <div class="kpi-sub">Reg 41001 Δ</div>
+      </div>
+
+      <div class="kpi-block">
+        <div class="kpi-label">Active Energy Consumption</div>
+        <div class="kpi-value" id="energy-bobst_m5">
+          24.1<span class="kpi-unit">kWh</span>
+        </div>
+        <div class="kpi-sub">Reg 40001 Δ</div>
+      </div>
+
+      <div class="kpi-block kpi-accent" data-tip="Efficiency index — lower is better">
+        <div class="kpi-label">Energy / Meter</div>
+        <div class="kpi-value kpi-amber" id="epm-bobst_m5">
+          12.42<span class="kpi-unit" style="font-size:11px"> kWh/m</span>
+        </div>
+        <div class="eff-rating">
+          <span class="eff-dot" id="eff-dot-bobst_m5" style="background: var(--amber)"></span>
+          <span class="eff-label" id="eff-label-bobst_m5">Average</span>
+        </div>
+      </div>
+
+    </div>
+
+
+    <div class="shift-section reveal reveal-4">
+
+      <div class="section-label" style="font-size: small;">
+        Shift Performance — Today
+      </div>
+
+      <div class="shift-table-wrap">
+        <table class="shift-table">
+          <thead>
+             <tr>
+              <th style="width:21%">Shift</th>
+              <th style="width:16%">Run h</th>
+              <th style="width:21%">Production m</th>
+              <th style="width:14%">Energy kWh</th>
+              <th style="width:14%">Speed m/min</th>
+              <th style="width:14%">kWh/m</th>
+            </tr>
+          </thead>
+
+          <tbody id="shifts-bobst_m5">
+
+            <tr class="row-active">
+              <td class="td-shift-name">
+                Shift-1
+                <span class="shift-time-badge">07–15</span>
+                <span class="tag-pill tag-worst">
+                  <i class="bi bi-arrow-down"></i>Low
+                </span>
+              </td>
+              <td>3.5</td>
+              <td style="color: var(--cyan)">
+                <span class="prod-stopped-at" style="display:none"></span>520
+              </td>
+              <td>6.8</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  24.8
+                </td>
+              <td style="color: var(--text-dim)">13.08</td>
+            </tr>
+
+            <tr>
+              <td class="td-shift-name">
+                Shift-2
+                <span class="shift-time-badge">15–23</span>
+                <span class="tag-pill tag-best">
+                  <i class="bi bi-arrow-up"></i>Best
+                </span>
+              </td>
+              <td>6.8</td>
+              <td style="color: var(--cyan)">
+                <span class="prod-stopped-at" style="display:none"></span>1,060
+              </td>
+              <td>13.1</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  44.1
+                </td>
+              <td style="color: var(--text-dim)">12.36</td>
+            </tr>
+
+            <tr>
+              <td class="td-shift-name">
+                Shift-3
+                <span class="shift-time-badge">23–07</span>
+              </td>
+              <td>2.7</td>
+              <td style="color: var(--cyan)">
+                <span class="prod-stopped-at" style="display:none"></span>360
+              </td>
+              <td>4.2</td>
+              <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+                  22.2
+                </td>
+              <td style="color: var(--text-dim)">11.67</td>
+            </tr>
+
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <div class="charts-section reveal reveal-5">
+
+      <div class="section-label" style="font-size: small;">
+        7-Days Trend
+        <span style="margin-left:auto; font-family: var(--font-mono);
+                     font-size:9px; color: var(--text-dim);">
+          Feb 20 – Feb 26
+        </span>
+      </div>
+
+      <div class="charts-grid">
+
+        <div class="chart-card">
+          <div class="chart-label">
+            Total Production
+            <span class="chart-latest" id="prod-latest-bobst">1,940 m</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-prod-bobst_m5"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-label">
+            Energy
+            <span class="chart-latest" id="energy-latest-bobst">24.1 kWh</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-energy-bobst_m5"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-label">
+            Total Run Hours
+            <span class="chart-latest" id="hours-latest-bobst">13.0 h</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-hours-bobst_m5"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-label">
+            kWh / m
+            <span class="chart-latest" id="epm-latest-bobst">12.42</span>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="chart-epm-bobst_m5"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+</div>{# /.scada-grid #}
+
+{% endblock %}{# /content #}
+
+
+{# ═══════════════════════════════════════════════════════════════════════════
+SCRIPTS BLOCK
+1. Static mock weekly data (replace with Jinja2 {{ machine_data|tojson }})
+2. Chart.js initialization (uses SCADA_SCALE from base.html)
+3. JS Fetch live-update stubs (ready for backend API wiring)
+═══════════════════════════════════════════════════════════════════════════ #}
+{% block scripts %}
+<script>
+  'use strict';
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     PrintOps SCADA Dashboard — Live API Integration
+     ─────────────────────────────────────────────────────────────────────────
+     Fetches real data from FastAPI backend with tiered polling:
+       GET /api/shifts/{machine_key}    → Shift performance  (every 5s)
+       GET /api/snapshot/{machine_key}  → KPI snapshot       (every 15s)
+       GET /api/weekly/{machine_key}    → 7-days trend charts (every 30 min)
+  ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* ─── Configuration ──────────────────────────────────────────────────── */
+
+  const SHIFT_SEC    = 5;
+  const KPI_SEC      = 15;
+  const CHART_SEC    = 30 * 60;
+  const COUNTDOWN_SEC = SHIFT_SEC;
+  const API_BASE     = '/api';
+
+  const MACHINES = [
+    { id: 'gallus_em280', key: 'gallus' },
+    { id: 'bobst_m5',     key: 'bobst'  },
+  ];
+
+  const SHIFT_TIMES = {
+    'Shift 1': '07–15',
+    'Shift 2': '15–23',
+    'Shift 3': '23–07',
+  };
+
+  /**
+   * Energy-per-meter efficiency thresholds (kWh/m).
+   * Calibrated to live sensor values (~0.0002 kWh/m range).
+   * Update these if your baseline changes.
+   */
+  const EFF_GOOD = 0.00025;
+  const EFF_WARN = 0.00035;
+
+
+  /* ─── Chart Registry ─────────────────────────────────────────────────── */
+
+  const _charts = {};
+
+  function destroyChart(id) {
+    if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+  }
+
+
+  /* ─── Format Helpers ─────────────────────────────────────────────────── */
+
+  /** Convert decimal hours to "Xh Ym" string (e.g. 0.92 → "0h 55m"). */
+  function fmtHours(decimal) {
+    const h = Math.floor(decimal);
+    const m = Math.round((decimal - h) * 60);
+    return `${h}h ${m}m`;
+  }
+
+  /**
+   * Format energy-per-meter with adaptive precision.
+   * Live sensors produce values like 0.000234 kWh/m — .toFixed(2) collapses
+   * these to "0.00". This function picks the right decimal places
+   * automatically based on magnitude.
+   *
+   *   val >= 1     → 2 dp  (e.g. 12.76)
+   *   val >= 0.1   → 3 dp  (e.g. 0.234)
+   *   val >= 0.01  → 4 dp  (e.g. 0.0023)
+   *   val >= 0     → 5 dp  (e.g. 0.00023)
+   */
+  function fmtEpm(val) {
+    if (val === 0)   return '0.00';
+    if (val < 0.01)  return val.toFixed(5);
+    if (val < 0.1)   return val.toFixed(4);
+    if (val < 1)     return val.toFixed(3);
+    return val.toFixed(2);
+  }
+
+
+  /* ─── Chart Builders ─────────────────────────────────────────────────── */
+
+  function buildBarChart(canvasId, labels, data, color) {
+    destroyChart(canvasId);
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    _charts[canvasId] = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: color + '44',
+          borderColor: color,
+          borderWidth: 1,
+          borderRadius: 2,
+          hoverBackgroundColor: color + '88',
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#ffffff', borderColor: '#bcc5d0', borderWidth: 1,
+            titleColor: '#111827', bodyColor: '#0d0d0d',
+            bodyFont: { family: "'Share Tech Mono', monospace", size: 13 },
+          },
+        },
+        scales: {
+          x: { ...window.SCADA_SCALE.x },
+          y: { ...window.SCADA_SCALE.y },
+        },
+      },
+    });
+  }
+
+  function buildLineChart(canvasId, labels, data, color, yMax, valueFmt) {
+    destroyChart(canvasId);
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    const yScale = {
+      ...window.SCADA_SCALE.y,
+      ...(yMax !== undefined ? { max: yMax } : {}),
+    };
+
+    if (valueFmt) {
+      yScale.ticks = { ...yScale.ticks, callback: (v) => valueFmt(v) };
+    }
+
+    const tooltipCfg = {
+      backgroundColor: '#ffffff', borderColor: '#bcc5d0', borderWidth: 1,
+      titleColor: '#111827', bodyColor: '#0d0d0d',
+      bodyFont: { family: "'Share Tech Mono', monospace", size: 13 },
+    };
+    if (valueFmt) {
+      tooltipCfg.callbacks = { label: (ctx) => valueFmt(ctx.parsed.y) };
+    }
+
+    _charts[canvasId] = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          borderColor: color,
+          backgroundColor: color + '14',
+          borderWidth: 1.5,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: color,
+          pointBorderColor: '#f4f6f9',
+          pointBorderWidth: 1,
+          fill: true,
+          tension: 0.35,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: tooltipCfg,
+        },
+        scales: {
+          x: { ...window.SCADA_SCALE.x },
+          y: yScale,
+        },
+      },
+    });
+  }
+
+  function buildMachineCharts(machineId, weeklyData) {
+    if (!weeklyData || !weeklyData.length) return;
+    const labels = weeklyData.map(d => d.date);
+
+    buildBarChart(`chart-prod-${machineId}`,   labels, weeklyData.map(d => d.production_m),  '#0077b6');
+    buildLineChart(`chart-energy-${machineId}`, labels, weeklyData.map(d => d.energy_kwh),    '#e65100');
+    buildLineChart(`chart-hours-${machineId}`,  labels, weeklyData.map(d => d.run_hours),     '#2e7d32', 24, fmtHours);
+    /* kWh/m trend — pass fmtEpm so axis ticks & tooltips use adaptive precision */
+    buildLineChart(`chart-epm-${machineId}`,    labels, weeklyData.map(d => d.energy_per_m),  '#0277bd', undefined, fmtEpm);
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     API RESPONSE MAPPERS
+  ═══════════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * Map GET /api/snapshot/{key} response → applySnapshot() shape.
+   * energy_kwh: backend returns kWh directly — no unit conversion needed.
+   * energy_per_meter: backend computes and returns this; fallback to
+   *   client-side calculation if field is missing or zero.
+   */
+  function mapSnapshot(raw) {
+    const runHours    = parseFloat(raw.run_hours || 0);
+    const energyKwh   = raw.energy_kwh || 0;
+    const productionM = raw.production_meters || 0;
+
+    const energyPerM  = raw.energy_per_meter
+      || (productionM > 0 ? energyKwh / productionM : 0);
+
+    return {
+      machine_status:     raw.status || 'STOP',
+      total_run_hours:    runHours,
+      total_production_m: productionM,
+      total_energy_kwh:   energyKwh,
+      energy_per_m:       energyPerM,
+      utilization_pct:    (runHours / 24) * 100,
+    };
+  }
+
+  /**
+   * Map GET /api/shifts/{key} response → applyShifts() array.
+   * energy_kwh: backend returns kWh directly — no unit conversion needed.
+   * energy_per_meter: backend computes and returns this; fallback to
+   *   client-side calculation if field is missing or zero.
+   */
+  function mapShifts(raw) {
+    return (raw.shifts || []).map(s => {
+      const energyKwh   = Math.max(s.energy_kwh || 0, 0);
+      const productionM = Math.max(s.production_meters || 0, 0);
+
+      const energyPerM  = s.energy_per_meter
+        || (productionM > 0 ? energyKwh / productionM : 0);
+
+      return {
+        shift_name:   s.shift || '—',
+        shift_time:   SHIFT_TIMES[s.shift] || '',
+        run_hours:    Math.max(s.run_hours || 0, 0),
+        production_m: productionM,
+        energy_kwh:   energyKwh,
+        speed_mph:    Math.max(s.machine_speed_mph || 0, 0),
+        speed_mpm:    Math.max(s.machine_speed_mpm || 0, 0),
+        energy_per_m: Math.max(energyPerM, 0),
+      };
+    });
+  }
+
+  /**
+   * Map GET /api/weekly/{key} response → buildMachineCharts() array.
+   * energy_kwh: backend returns kWh directly — no unit conversion needed.
+   */
+  function mapWeekly(raw) {
+    return (raw.dates || []).map((date, i) => ({
+      date,
+      production_m: (raw.production      || [])[i] || 0,
+      energy_kwh:   (raw.energy_kwh      || [])[i] || 0,
+      run_hours:    (raw.run_hours        || [])[i] || 0,
+      energy_per_m: (raw.energy_per_meter || [])[i] || 0,
+    }));
+  }
+
+
+  /* ─── DOM Helpers ────────────────────────────────────────────────────── */
+
+  function setHTML(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  }
+
+  function applyStatus(machineId, status) {
+    const el = document.getElementById(`status-${machineId}`);
+    if (!el) return;
+    el.textContent = status;
+    el.className = status === 'RUN' ? 'badge-run' : 'badge-stop';
+  }
+
+  function utilFillClass(pct) {
+    if (pct >= 85) return 'bar-fill-green';
+    if (pct >= 65) return 'bar-fill-amber';
+    return 'bar-fill-red';
+  }
+
+  function utilValueClass(pct) {
+    if (pct >= 85) return 'kpi-green';
+    if (pct >= 65) return 'kpi-cyan';
+    return 'kpi-amber';
+  }
+
+  function epmStyle(epm) {
+    if (epm <= EFF_GOOD) return { cls: 'kpi-cyan',  dot: 'var(--green)', label: 'Efficient' };
+    if (epm <= EFF_WARN) return { cls: 'kpi-amber', dot: 'var(--amber)', label: 'Average'   };
+    return                      { cls: 'kpi-red',   dot: 'var(--red)',   label: 'High'       };
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     KPI DOM UPDATERS
+  ═══════════════════════════════════════════════════════════════════════════ */
+
+  const _stopTimes = {};
+
+  /**
+   * Apply snapshot data to all KPI elements.
+   * Uses fmtEpm() for energy_per_m to handle sub-0.01 live sensor values.
+   */
+  function applySnapshot(machineId, d) {
+    const id = machineId;
+
+    applyStatus(id, d.machine_status);
+
+    /* Stopped-at indicator */
+    const isStopped  = d.machine_status !== 'RUN';
+    const wasStopped = _stopTimes[id] !== undefined;
+
+    if (isStopped && !wasStopped) {
+      _stopTimes[id] = new Date();
+    } else if (!isStopped && wasStopped) {
+      delete _stopTimes[id];
+    }
+
+    document.querySelectorAll(`#panel-${id} .prod-stopped-at`).forEach(el => {
+      if (isStopped && _stopTimes[id]) {
+        const stopTime = _stopTimes[id].toLocaleTimeString(
+          'en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' }
+        );
+        el.textContent    = `(${stopTime}) `;
+        el.style.display  = 'inline';
+      } else {
+        el.style.display  = 'none';
+      }
+    });
+
+    /* Utilisation */
+    const pct  = parseFloat(d.utilization_pct).toFixed(1);
+    const idle = (24 - parseFloat(d.total_run_hours)).toFixed(1);
+    const uCls = utilValueClass(parseFloat(pct));
+
+    const utilValEl = document.getElementById(`util-${id}`);
+    if (utilValEl) {
+      utilValEl.className = `kpi-value ${uCls}`;
+      utilValEl.innerHTML = `${pct}<span class="kpi-unit">%</span>`;
+    }
+
+    const utilBarEl = document.getElementById(`util-bar-${id}`);
+    if (utilBarEl) {
+      utilBarEl.className  = `bar-fill ${utilFillClass(parseFloat(pct))}`;
+      utilBarEl.style.width = `${pct}%`;
+    }
+
+    /* Run hours */
+    setHTML(`runhours-${id}`, fmtHours(parseFloat(d.total_run_hours)));
+
+    const runBlock = document.getElementById(`runhours-${id}`);
+    if (runBlock) {
+      const sub = runBlock.nextElementSibling;
+      if (sub && sub.classList.contains('kpi-sub')) {
+        sub.textContent = `Idle: ${fmtHours(parseFloat(idle))}`;
+      }
+    }
+
+    /* Production */
+    const prodVal = parseFloat(d.total_production_m || 0);
+    const prodFmt = prodVal >= 1 ? Math.round(prodVal).toLocaleString('en-GB') : prodVal.toFixed(2);
+    setHTML(`prod-${id}`, `${prodFmt}<span class="kpi-unit">m</span>`);
+
+    /* Energy */
+    setHTML(`energy-${id}`,
+      `${parseFloat(d.total_energy_kwh).toFixed(1)}<span class="kpi-unit">kWh</span>`);
+
+    /* ── Energy per meter — fmtEpm() handles sub-0.01 live values ── */
+    const epm    = fmtEpm(parseFloat(d.energy_per_m));
+    const effSty = epmStyle(parseFloat(d.energy_per_m));
+
+    const epmEl = document.getElementById(`epm-${id}`);
+    if (epmEl) {
+      epmEl.className = `kpi-value ${effSty.cls}`;
+      epmEl.innerHTML = `${epm}<span class="kpi-unit" style="font-size:11px"> kWh/m</span>`;
+    }
+
+    const dotEl   = document.getElementById(`eff-dot-${id}`);
+    const labelEl = document.getElementById(`eff-label-${id}`);
+    if (dotEl)   dotEl.style.background = effSty.dot;
+    if (labelEl) labelEl.textContent    = effSty.label;
+
+    /* Chart latest-value badges */
+    const sid = id.split('_')[0];
+    setHTML(`prod-latest-${sid}`,   `${prodFmt} m`);
+    setHTML(`energy-latest-${sid}`, `${parseFloat(d.total_energy_kwh).toFixed(1)} kWh`);
+    setHTML(`hours-latest-${sid}`,  fmtHours(parseFloat(d.total_run_hours)));
+    setHTML(`epm-latest-${sid}`,    epm);   /* already formatted by fmtEpm */
+  }
+
+  /**
+   * Re-render shift table rows.
+   * Uses fmtEpm() in the kWh/m column — fixes "0.00" for sub-0.01 values.
+   */
+  function applyShifts(machineId, shifts, serverHourIst) {
+    const tbody = document.getElementById(`shifts-${machineId}`);
+    if (!tbody || !Array.isArray(shifts) || shifts.length === 0) return;
+
+    const prods  = shifts.map(s => s.production_m);
+    const maxProd = Math.max(...prods);
+    const minProd = Math.min(...prods);
+
+    const nowHour = Number.isInteger(serverHourIst)
+      ? serverHourIst
+      : new Date().getHours();
+
+    function isCurrentShift(shiftTime) {
+      if (shiftTime === '07–15') return nowHour >= 7  && nowHour < 15;
+      if (shiftTime === '15–23') return nowHour >= 15 && nowHour < 23;
+      return nowHour >= 23 || nowHour < 7;
+    }
+
+    const isMachineStopped = _stopTimes[machineId] !== undefined;
+    const stopTimeStr = isMachineStopped
+      ? _stopTimes[machineId].toLocaleTimeString(
+          'en-GB', { hour12: false, hour: '2-digit', minute: '2-digit' }
+        )
+      : '';
+
+    tbody.innerHTML = shifts.map(s => {
+      const isWorst   = s.production_m === minProd && shifts.length > 1;
+      const isBest    = s.production_m === maxProd && shifts.length > 1;
+      const isCurrent = isCurrentShift(s.shift_time || '');
+
+      const rowCls = isCurrent ? 'row-active' : isWorst ? 'row-worst' : '';
+
+      const tag = isBest
+        ? `<span class="tag-pill tag-best"><i class="bi bi-arrow-up"></i>Best</span>`
+        : isWorst
+          ? `<span class="tag-pill tag-worst"><i class="bi bi-arrow-down"></i>Low</span>`
+          : '';
+
+      const speedMpm  = parseFloat(s.speed_mpm  || 0).toFixed(1);
+      const prodVal   = parseFloat(s.production_m || 0);
+      const prodNum   = prodVal >= 1 ? Math.round(prodVal).toLocaleString('en-GB') : prodVal.toFixed(2);
+      const prodCol   = isWorst ? '' : 'style="color: var(--cyan)"';
+
+      const showStopTime   = isCurrent && isMachineStopped && stopTimeStr;
+      const stopTimeDisplay = showStopTime
+        ? `<span class="prod-stopped-at" style="display:inline">(${stopTimeStr}) </span>`
+        : `<span class="prod-stopped-at" style="display:none"></span>`;
+
+      return `
+      <tr class="${rowCls}">
+        <td class="td-shift-name">
+          ${s.shift_name}
+          <span class="shift-time-badge">${s.shift_time || ''}</span>
+          ${tag}
+        </td>
+        <td>${fmtHours(parseFloat(s.run_hours || 0))}</td>
+        <td ${prodCol}>${stopTimeDisplay}${prodNum}</td>
+        <td>${parseFloat(s.energy_kwh || 0).toFixed(1)}</td>
+        <td style="color: var(--cyan); font-family: var(--font-mono); font-weight: 600;">
+          ${speedMpm}
+        </td>
+        <td style="color: var(--text-dim)">${fmtEpm(parseFloat(s.energy_per_m || 0))}</td>
+      </tr>`;
+    }).join('');
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     LIVE FETCH ORCHESTRATOR
+  ═══════════════════════════════════════════════════════════════════════════ */
+
+  async function refreshShifts() {
+    try {
+      const jobs = MACHINES.map(m =>
+        fetch(`${API_BASE}/shifts/${m.key}`, { signal: AbortSignal.timeout(8000) })
+          .then(r => { if (!r.ok) throw new Error(`Shifts HTTP ${r.status}`); return r.json(); })
+          .then(raw => ({ id: m.id, d: mapShifts(raw), serverHourIst: raw.server_hour_ist }))
+      );
+
+      const results = await Promise.all(jobs);
+      results.forEach(({ id, d, serverHourIst }) => applyShifts(id, d, serverHourIst));
+
+      window.resetCountdown(SHIFT_SEC);
+      window.setLastUpdated();
+
+    } catch (err) {
+      console.error('[SCADA] refreshShifts error:', err);
+      window.resetCountdown(SHIFT_SEC);
+    }
+  }
+
+  async function refreshKPI() {
+    try {
+      const jobs = MACHINES.map(m =>
+        fetch(`${API_BASE}/snapshot/${m.key}`, { signal: AbortSignal.timeout(8000) })
+          .then(r => { if (!r.ok) throw new Error(`Snapshot HTTP ${r.status}`); return r.json(); })
+          .then(raw => ({ id: m.id, d: mapSnapshot(raw) }))
+      );
+
+      const results = await Promise.all(jobs);
+      results.forEach(({ id, d }) => applySnapshot(id, d));
+
+      window.setDbStatus('ok');
+      window.clearAlert();
+      window.setLastUpdated();
+
+    } catch (err) {
+      console.error('[SCADA] refreshKPI error:', err);
+      try { window.setDbStatus('error'); } catch (_) { }
+      window.showAlert(`KPI fetch error — retrying in ${KPI_SEC}s`);
+    }
+  }
+
+  async function fetchWeeklyData() {
+    try {
+      const results = await Promise.all(
+        MACHINES.map(m =>
+          fetch(`${API_BASE}/weekly/${m.key}`, { signal: AbortSignal.timeout(12000) })
+            .then(r => { if (!r.ok) throw new Error(`Weekly HTTP ${r.status}`); return r.json(); })
+            .then(raw => ({ id: m.id, data: mapWeekly(raw) }))
+        )
+      );
+
+      results.forEach(({ id, data }) => buildMachineCharts(id, data));
+
+      results.forEach(({ data }) => {
+        if (data.length >= 2) {
+          const rangeEl = document.querySelector('.charts-section .section-label span');
+          if (rangeEl) {
+            rangeEl.textContent = `${data[0].date} – ${data[data.length - 1].date}`;
+          }
+        }
+      });
+
+    } catch (err) {
+      console.error('[SCADA] fetchWeeklyData error:', err);
+    }
+  }
+
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     INITIALISE ON DOM READY
+  ═══════════════════════════════════════════════════════════════════════════ */
+  document.addEventListener('DOMContentLoaded', async () => {
+
+    await Promise.allSettled([
+      fetchWeeklyData(),
+      refreshKPI(),
+      refreshShifts(),
+    ]);
+
+    setInterval(refreshShifts,    SHIFT_SEC  * 1000);
+    setInterval(refreshKPI,       KPI_SEC    * 1000);
+    setInterval(fetchWeeklyData,  CHART_SEC  * 1000);
+
+  });
+</script>
+{% endblock %}

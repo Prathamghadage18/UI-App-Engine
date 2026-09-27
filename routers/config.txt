@@ -1,0 +1,37 @@
+MEASUREMENTS:
+441d64c2904c
+441d64c29024
+
+machines:
+
+machine_key: gallus
+machine_id: 10
+machine_name: Gallus EM 280
+location: Huhtamaki-Ambernath
+measurement: 441d64c2904c
+pulse_fields: 41001
+energy_fields: 43204
+pulses_per_revolution: 2500
+meters_per_revolution: 0.185353967
+shift1_start: 07:00
+shift1_end: 15:00
+shift2_start: 15:00
+shift2_end: 23:00
+shift3_start: 23:00
+shift3_end: 07:00
+
+machine_key: bobst
+machine_id: 11
+machine_name: BOBST M5
+location: Huhtamaki-Ambernath
+measurement: 441d64c29024
+pulse_fields: 41003
+energy_fields: 43204
+pulses_per_revolution: 131
+meters_per_revolution: 0.188495559
+shift1_start: 07:00
+shift1_end: 15:00
+shift2_start: 15:00
+shift2_end: 23:00
+shift3_start: 23:00
+shift3_end: 07:00

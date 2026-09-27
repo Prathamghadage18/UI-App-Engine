@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+  <!-- Prevent browser from sleeping on always-on 55-inch display -->
+  <meta http-equiv="refresh" content="3600" /><!-- Hard reload every hour -->
+
+  <title>{% block title %}PrintOps SCADA — Hutamaki{% endblock %}</title>
+
+  <!-- ═══════════════════════════════════════════════════════
+       GOOGLE FONTS
+       Rajdhani   → Section labels, machine names, UI text
+       Share Tech Mono → All numeric readouts (KPIs, counters)
+  ═══════════════════════════════════════════════════════ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet" />
+
+  <!-- Bootstrap 5 — for grid utilities and resets only -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous" />
+
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css"
+        rel="stylesheet" />
+
+  <style>
+    /* ═══════════════════════════════════════════════════════════════════
+       DESIGN TOKEN SYSTEM
+       All colours, spacing, and typography defined as CSS custom
+       properties. Change a variable here → updates the whole UI.
+    ═══════════════════════════════════════════════════════════════════ */
+    :root {
+
+      /* ── Background layers ───────────────────────────────────────── */
+      --bg-root:          #f4f6f9;   /* light gray background */
+      --bg-panel:         #ffffff;   /* white header / footer / panel shell */
+      --bg-card:          #ffffff;   /* white KPI blocks, table rows */
+      --bg-card-hover:    #f0f2f5;   /* subtle hover lift */
+      --bg-row-alt:       #f8f9fb;   /* table row alt */
+      --bg-row-worst:     #fff5f5;   /* shift underperform row */
+
+      /* ── Border colours ──────────────────────────────────────────── */
+      --border-subtle:    #e8ecf0;   /* light structural lines */
+      --border-base:      #d5dbe3;   /* standard card border */
+      --border-bright:    #bcc5d0;   /* header/footer accent border */
+      --border-divider:   #cdd5df;   /* machine panel separator */
+
+      /* ── Accent palette ──────────────────────────────────────────── */
+      --cyan:             #0077b6;   /* primary accent — deep blue */
+      --cyan-dim:         #5aacce;   /* muted accent for bars/borders */
+      --cyan-glow:        rgba(0, 119, 182, 0.12);
+      --green:            #2e7d32;   /* RUN status, ok utilisation */
+      --green-glow:       rgba(46, 125, 50, 0.12);
+      --red:              #c62828;   /* STOP status, underperform */
+      --red-glow:         rgba(198, 40, 40, 0.12);
+      --amber:            #e65100;   /* warning utilisation */
+      --amber-dim:        rgba(230, 81, 0, 0.10);
+      --blue-mid:         #0277bd;   /* energy charts */
+
+      /* ── Text hierarchy ──────────────────────────────────────────── */
+      --text-primary:     #1a1a2e;   /* main readable text — near black */
+      --text-secondary:   #111827;   /* supporting labels — near black */
+      --text-dim:         #1f2937;   /* metadata, timestamps — very dark */
+      --text-label:       #111827;   /* section label uppercase — near black */
+      --text-value:       #0d0d0d;   /* KPI numbers — darkest */
+
+      /* ── Typography ──────────────────────────────────────────────── */
+      --font-display:     'Rajdhani', sans-serif;   /* labels, headings */
+      --font-mono:        'Share Tech Mono', monospace; /* numbers */
+
+      /* ── Layout dimensions — tuned for 55-inch @ 1920×1080 ──────── */
+      --header-h:         52px;
+      --footer-h:         34px;
+      --panel-gap:        2px;       /* machine divider width */
+      --section-gap:      10px;      /* vertical gap between sections */
+      --card-radius:      5px;       /* sharp corners = industrial feel */
+      --card-pad-x:       14px;
+      --card-pad-y:       10px;
+
+      /* ── Transitions ─────────────────────────────────────────────── */
+      --transition-fast:  0.2s ease;
+      --transition-mid:   0.5s ease;
+      --transition-slow:  0.8s ease;
+    }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       GLOBAL RESET + BASE
+    ═══════════════════════════════════════════════════════════════════ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;   /* SCADA screen — no scrollbar ever */
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--bg-root);
+      color: var(--text-primary);
+      font-family: var(--font-display);
+      font-size: 14px;
+      line-height: 1.4;
+
+      /* Subtle grid texture — gives depth to the light background */
+      background-image:
+        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Remove Bootstrap's default body background */
+    body.bg-dark { background-color: transparent !important; }
+    body.bg-light { background-color: transparent !important; }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PAGE SHELL — flex column, full viewport height
+       header | main (flex-grow) | footer
+    ═══════════════════════════════════════════════════════════════════ */
+    .scada-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       HEADER
+    ═══════════════════════════════════════════════════════════════════ */
+    .scada-header {
+      flex-shrink: 0;
+      height: var(--header-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--bg-panel);
+
+      /* Bottom border for header separation */
+      border-bottom: 1px solid var(--border-bright);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+      position: relative;
+      z-index: 100;
+    }
+
+    /* Top accent line across header */
+    .scada-header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--cyan) 20%, transparent 100%);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-logo {
+      height: 32px;
+      width: auto;
+      max-height: 32px;
+      object-fit: contain;
+    }
+
+    .header-org {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.04em;
+    }
+
+    .header-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border-base);
+    }
+
+    .header-system {
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Clock (right-aligned) ─────────────────────────────────────── */
+    .header-clock {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+    }
+
+    .live-clock {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      color: var(--text-value);
+      letter-spacing: 0.06em;
+      line-height: 1;
+    }
+
+    .live-date {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.12em;
+    }
+
+    /* ── Right: Status indicators ──────────────────────────────────── */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Live pulse badge */
+    .live-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 12px 4px 8px;
+      background: rgba(46, 125, 50, 0.08);
+      border: 1px solid rgba(46, 125, 50, 0.30);
+      border-radius: 3px;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(46, 125, 50, 0.5);
+      animation: dot-pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes dot-pulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(46, 125, 50, 0.5);
+      }
+      50% {
+        transform: scale(0.75);
+        opacity: 0.55;
+        box-shadow: 0 0 3px rgba(46, 125, 50, 0.3);
+      }
+    }
+
+    .live-text {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      color: var(--green);
+      text-transform: uppercase;
+    }
+
+    /* Meter model tag */
+    .meter-tag {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 1px;
+    }
+
+    .meter-tag .meter-model {
+      color: var(--text-secondary);
+      font-size: 11px;
+    }
+
+    /* Network status indicator */
+    .net-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+
+    .net-indicator .bi {
+      font-size: 12px;
+      color: var(--cyan-dim);
+    }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       MAIN CONTENT SLOT
+       Child template (scada.html) fills this via block content
+    ═══════════════════════════════════════════════════════════════════ */
+    .scada-main {
+      flex: 1;
+      overflow: hidden;   /* NO scroll — child must also respect this */
+      position: relative;
+    }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════════════════════ */
+    .scada-footer {
+      flex-shrink: 0;
+      height: var(--footer-h);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-bright);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+    }
+
+    /* Bottom accent line */
+    .scada-footer::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: var(--border-bright);
+      opacity: 0.5;
+    }
+
+    .footer-left,
+    .footer-center,
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-dim);
+    }
+
+    .footer-center {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .footer-sep {
+      width: 1px;
+      height: 12px;
+      background: var(--border-bright);
+      margin: 0 14px;
+    }
+
+    .footer-val {
+      color: var(--text-secondary);
+    }
+
+    /* Countdown ring — small circular progress */
+    .countdown-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .countdown-label { color: var(--text-dim); }
+    .countdown-num   { color: var(--cyan); font-size: 11px; }
+
+    /* Alert flash — appears in footer on data error */
+    .footer-alert {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      color: var(--red);
+      animation: blink-alert 1s step-end infinite;
+    }
+    .footer-alert.show { display: flex; }
+
+    @keyframes blink-alert {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       SHARED COMPONENT TOKENS
+       Used across scada.html — defined here so base owns the design system
+    ═══════════════════════════════════════════════════════════════════ */
+
+    /* ── Section divider label ─────────────────────────────────────── */
+    .section-label {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.26em;
+      color: var(--text-label);
+      text-transform: uppercase;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-label::before {
+      content: '';
+      display: inline-block;
+      width: 14px;
+      height: 1px;
+      background: var(--cyan-dim);
+    }
+
+    /* ── Monospace value helper ─────────────────────────────────────── */
+    .mono {
+      font-family: var(--font-mono);
+    }
+
+    /* ── Status badges ──────────────────────────────────────────────── */
+    .badge-run {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--green);
+      background: rgba(46, 125, 50, 0.08);
+      border: 1px solid rgba(46, 125, 50, 0.35);
+      border-radius: 3px;
+      box-shadow: none;
+    }
+
+    .badge-run::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 4px rgba(46, 125, 50, 0.5);
+      animation: dot-pulse 2.4s ease-in-out infinite;
+    }
+
+    .badge-stop {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--red);
+      background: rgba(198, 40, 40, 0.07);
+      border: 1px solid rgba(198, 40, 40, 0.30);
+      border-radius: 3px;
+    }
+
+    .badge-stop::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    /* ── Progress / bar components ──────────────────────────────────── */
+    .bar-track {
+      height: 5px;
+      border-radius: 2px;
+      background: var(--border-base);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width var(--transition-mid);
+    }
+
+    .bar-fill-cyan   { background: linear-gradient(90deg, var(--cyan-dim), var(--cyan)); }
+    .bar-fill-green  { background: var(--green); }
+    .bar-fill-amber  { background: var(--amber); }
+    .bar-fill-red    { background: var(--red); }
+
+    /* ── Card / block base ──────────────────────────────────────────── */
+    .scada-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-base);
+      border-radius: var(--card-radius);
+      padding: var(--card-pad-y) var(--card-pad-x);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Accent top border variant */
+    .scada-card.accent-top::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--cyan), transparent 70%);
+    }
+
+    /* Glow border variant */
+    .scada-card.glow {
+      border-color: var(--cyan-dim);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    /* ── Tooltip (pure CSS — no JS needed) ──────────────────────────── */
+    [data-tip] {
+      position: relative;
+      cursor: default;
+    }
+
+    [data-tip]::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      border: 1px solid var(--border-bright);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.10);
+      color: var(--text-primary);
+      font-size: 10px;
+      font-family: var(--font-mono);
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 3px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-fast);
+      z-index: 500;
+    }
+
+    [data-tip]:hover::after {
+      opacity: 1;
+    }
+
+    /* ── Scrollbar — for any overflow-auto container ─────────────────── */
+    ::-webkit-scrollbar        { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track  { background: var(--bg-root); }
+    ::-webkit-scrollbar-thumb  { background: var(--border-bright); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--cyan-dim); }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       PAGE LOAD ANIMATION — staggered reveal
+    ═══════════════════════════════════════════════════════════════════ */
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal {
+      animation: fade-up 0.5s ease both;
+    }
+
+    .reveal-1 { animation-delay: 0.05s; }
+    .reveal-2 { animation-delay: 0.10s; }
+    .reveal-3 { animation-delay: 0.15s; }
+    .reveal-4 { animation-delay: 0.20s; }
+    .reveal-5 { animation-delay: 0.25s; }
+    .reveal-6 { animation-delay: 0.30s; }
+
+
+    /* ═══════════════════════════════════════════════════════════════════
+       UTILITY OVERRIDES — Bootstrap resets we need to undo
+    ═══════════════════════════════════════════════════════════════════ */
+    table { border-collapse: collapse; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { color: var(--text-value); }
+
+    /* Bootstrap's .text-secondary override */
+    .text-secondary { color: var(--text-secondary) !important; }
+    .text-dim       { color: var(--text-dim) !important; }
+    .text-cyan      { color: var(--cyan) !important; }
+    .text-green     { color: var(--green) !important; }
+    .text-red       { color: var(--red) !important; }
+    .text-amber     { color: var(--amber) !important; }
+    .text-value     { color: var(--text-value) !important; }
+
+    /* Font helpers */
+    .font-display { font-family: var(--font-display) !important; }
+    .font-mono    { font-family: var(--font-mono)    !important; }
+
+    /* ── Header navigation button ───────────────────────────────────── */
+    .header-nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-primary);
+      background: var(--bg-panel);
+      border: 1px solid var(--border-base);
+      border-radius: var(--card-radius);
+      text-decoration: none;
+      transition: all var(--transition-fast);
+    }
+
+    .header-nav-btn:hover {
+      border-color: var(--cyan);
+      background: var(--cyan-glow);
+      color: var(--cyan);
+    }
+
+    .header-nav-btn i {
+      font-size: 14px;
+      color: var(--cyan);
+    }
+
+    {% block extra_css %}{% endblock %}
+  </style>
+</head>
+
+<body>
+<div class="scada-shell">
+
+  <!-- ═══════════════════════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════════════════════ -->
+  <header class="scada-header reveal reveal-1">
+
+    <!-- Left: Logo + Org + System name -->
+   <div class="header-left">
+  <a href="/">
+    <img src="/static/assets/Logo.jpeg" alt="Huhtamaki Logo" class="header-logo">
+  </a>
+  <div class="header-sep"></div>
+  <span class="header-system">Printing Machine Monitor</span>
+</div>
+
+
+    <!-- Right: Status cluster + clock -->
+    <div class="header-right">
+
+      <!-- Reports link button -->
+      <a href="/report" class="header-nav-btn" title="Go to Reports">
+        <i class="bi bi-file-earmark-text"></i>
+        <span>Reports</span>
+      </a>
+
+      <div class="header-sep"></div>
+
+      <!-- Last updated -->
+      <div class="header-updated" style="display:flex; align-items:center; gap:6px; font-family:var(--font-mono); font-size:10px; letter-spacing:0.08em;">
+        <i class="bi bi-arrow-clockwise" style="color: var(--cyan-dim); font-size: 11px;"></i>
+        <span style="color: var(--text-dim);">Last updated:</span>
+        <span id="last-updated" style="color: var(--text-secondary);">—</span>
+      </div>
+
+      <!-- Live pulse badge -->
+      <div class="live-badge">
+        <span class="live-dot"></span>
+        <span class="live-text">Live</span>
+      </div>
+
+      <!-- Live clock -->
+      <div class="header-clock">
+        <span class="live-clock" id="live-clock">00:00:00</span>
+        <span class="live-date"  id="live-date">—</span>
+      </div>
+
+    </div>
+  </header>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN — filled by child template
+  ═══════════════════════════════════════════════════════ -->
+  <main class="scada-main">
+    {% block content %}{% endblock %}
+  </main>
+
+
+  <!-- ═══════════════════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════════════════ -->
+  <footer class="scada-footer reveal reveal-6">
+
+    <!-- Left: Alert slot -->
+    <div class="footer-left">
+      <!-- Alert slot (hidden until error) -->
+      <div class="footer-alert" id="footer-alert">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <span id="footer-alert-text">Data fetch error</span>
+      </div>
+    </div>
+
+    <!-- Center: Countdown -->
+    <div class="footer-center countdown-wrap">
+      <span class="countdown-label">Next refresh</span>
+      <span class="countdown-num" id="countdown">5</span>
+      <span class="countdown-label">s</span>
+    </div>
+
+    <!-- Right: System info -->
+    <!--<div class="footer-right">
+      <span>Org: Huhtamaki</span>
+      <div class="footer-sep"></div>
+      <span>GW: a2f9d108ff</span>
+      <div class="footer-sep"></div>
+      <span>Reg: 40001 · 40100</span>
+      <div class="footer-sep"></div>
+      <span style="color: var(--text-dim);">PrintOps v1.0</span>
+    </div>-->
+
+  </footer>
+
+</div><!-- /.scada-shell -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     VENDOR SCRIPTS
+     Chart.js loaded here so child template can use it
+═══════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmMRk3d8k+E7PO/Qicj5LoFq7tn"
+        crossorigin="anonymous"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script>
+  /* ═══════════════════════════════════════════════════════════════════
+     BASE JAVASCRIPT — runs on every page
+  ═══════════════════════════════════════════════════════════════════ */
+
+  // ── Live clock ────────────────────────────────────────────────────
+  (function initClock() {
+    const clockEl = document.getElementById('live-clock');
+    const dateEl  = document.getElementById('live-date');
+
+    function tick() {
+      const now = new Date();
+
+      clockEl.textContent = now.toLocaleTimeString('en-GB', {
+        hour12: false,
+        hour:   '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+
+      dateEl.textContent = now.toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day:     '2-digit',
+        month:   'short',
+        year:    'numeric',
+      }).toUpperCase();
+    }
+
+    tick();
+    setInterval(tick, 1000);
+  })();
+
+
+  // ── Countdown timer (shared — child JS resets to REFRESH_INTERVAL) ─
+  // Child scada.js exposes window.REFRESH_INTERVAL and calls
+  // window.resetCountdown() after each successful fetch.
+  (function initCountdown() {
+    const el = document.getElementById('countdown');
+    let count = parseInt(el.textContent, 10) || 30;
+
+    window.resetCountdown = function(sec) {
+      count = sec || 30;
+    };
+
+    setInterval(() => {
+      count = Math.max(0, count - 1);
+      el.textContent = count;
+    }, 1000);
+  })();
+
+
+  // ── DB status indicator ───────────────────────────────────────────
+  // Child JS calls window.setDbStatus('ok'|'error'|'connecting')
+  (function initDbIndicator() {
+    const indicator = document.getElementById('db-indicator');
+    const statusTxt = document.getElementById('db-status-text');
+
+    const states = {
+      connecting: { text: 'Connecting…', color: 'var(--text-dim)' },
+      ok:         { text: 'InfluxDB OK',  color: 'var(--green)'    },
+      error:      { text: 'DB Error',     color: 'var(--red)'      },
+    };
+
+    window.setDbStatus = function(state) {
+      const s = states[state] || states.connecting;
+      if (statusTxt) {
+        statusTxt.textContent  = s.text;
+        statusTxt.style.color  = s.color;
+      }
+    };
+  })();
+
+
+  // ── Footer alert ──────────────────────────────────────────────────
+  // Child JS calls window.showAlert('msg') / window.clearAlert()
+  (function initAlert() {
+    const alertEl  = document.getElementById('footer-alert');
+    const alertTxt = document.getElementById('footer-alert-text');
+
+    window.showAlert = function(msg) {
+      alertTxt.textContent = msg || 'Data fetch error';
+      alertEl.classList.add('show');
+    };
+
+    window.clearAlert = function() {
+      alertEl.classList.remove('show');
+    };
+  })();
+
+
+  // ── Last-updated timestamp ────────────────────────────────────────
+  window.setLastUpdated = function() {
+    const el = document.getElementById('last-updated');
+    if (el) {
+      el.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    }
+  };
+
+
+  // ── Chart.js global defaults — light industry theme ──────────────
+  Chart.defaults.color        = '#1f2937';
+  Chart.defaults.borderColor  = '#e8ecf0';
+  Chart.defaults.font.family  = "'Share Tech Mono', monospace";
+  Chart.defaults.font.size    = 12;
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.animation.duration     = 600;
+  Chart.defaults.responsive             = true;
+  Chart.defaults.maintainAspectRatio    = false;
+
+  // Shared scale defaults for all charts
+  window.SCADA_SCALE = {
+    x: {
+      grid:   { display: false },
+      border: { display: false },
+      ticks:  { color: '#1f2937', font: { size: 12, weight: 'bold' }, maxRotation: 0, maxTicksLimit: 7 },
+    },
+    y: {
+      grid:   { color: '#e8ecf0', drawBorder: false },
+      border: { display: false },
+      ticks:  { color: '#1f2937', font: { size: 12, weight: 'bold' }, maxTicksLimit: 4 },
+    },
+  };
+</script>
+
+<!-- Child template injects page-specific JS here -->
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

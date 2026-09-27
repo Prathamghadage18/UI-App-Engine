@@ -1,0 +1,213 @@
+#version: "3.9"
+services:
+
+  # mosqiutto
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: always
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  # Creates an InfluxDB instance to store datapoints
+  influxdb:
+    image: influxdb:1.8.10
+    restart: always
+    volumes:
+      - ./influxdb:/var/lib/influxdb
+    #ports:
+    #  - "8086:8086"
+    expose:
+      - "8086"
+    environment:
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin123
+      - INFLUXDB_HTTP_AUTH_ENABLED=true
+      - INFLUXDB_HTTP_BIND_ADDRESS=:8086
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  # redis queue
+  redis:
+    image: redis:alpine
+    expose:
+      - "6379"
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  # data forwarder to celery
+  datafwdr:
+    build:
+      context: ./datafwdr
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      mqtthost: mosquitto
+      mqttuser: sisai
+      mqttpasswd: sisai123
+      mqttport: 1883
+      mqtttopic: '#' # Org_Garware/<ALL>
+    depends_on:
+      - redis
+      - mosquitto
+    volumes: ['./datafwdr:/datafwdr']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  # execution of celery task
+  celery-tasks:
+    build:
+      context: ./celery-queue
+      dockerfile: Dockerfile
+    restart: always
+    command: ["celery", "-A", "tasks", "worker", "-l", "info", "-E", "-c", "2"]
+    environment:
+      CELERY_BROKER_URL: redis://redis
+      CELERY_RESULT_BACKEND: redis://redis
+      INFLUXDB_URL: influxdb
+      INFLUXDB_USER: admin
+      INFLUXDB_PASSWORD: admin123
+      INFLUXDB_DATABASE: Org_test # ignore this
+      PLUGINS: '["Org_huhtamaki"]'
+    deploy:
+     mode: replicated
+     replicas: 4
+    depends_on:
+      - redis
+      - influxdb
+    volumes: ['./celery-queue:/queue']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  monitor:
+    build:
+      context: ./celery-queue
+      dockerfile: Dockerfile
+#    image: sisai-app-engine-monitor:0.1
+    restart: always
+    ports:
+      - "5555:5555"
+    command:  ['celery', 'flower', '-A', 'tasks']
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FLOWER_BASIC_AUTH: flower:flower123
+    depends_on:
+      - redis
+      - celery-tasks
+    volumes: ['./celery-queue:/queue']
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  chronograf:
+    image: chronograf:latest
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      # Use the Docker DNS name 'influxdb' (service name) to reach the InfluxDB container
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_USERNAME: admin
+      INFLUXDB_PASSWORD: admin123
+    depends_on:
+      - influxdb
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  app:
+    build: .
+    container_name: printing_app
+
+    ports:
+      - "80:8000"
+    environment:
+      DB_USER: postgres
+      DB_PASSWORD: Pratham11
+      DB_NAME: Printing_Machine_Dashboard
+      DB_HOST: postgres
+      DB_PORT: 5432
+      INFLUX_BASE_URL: http://influxdb:8086
+      INFLUX_DB: Org_huhtamaki
+      INFLUX_USER: admin
+      INFLUX_PASSWORD: admin123
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    volumes:
+      - ./static:/app/static
+      - ./templates:/app/templates
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+  postgres:
+    image: postgres:15
+    container_name: printing_postgres
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Pratham11
+      POSTGRES_DB: Printing_Machine_Dashboard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+    restart: always
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "7"
+
+volumes:
+  influxdb:
+  mosquitto:
+  datafwdr:
+  celery-tasks:
+  monitor:
+  redis:
+  api:
+  postgres_data:
+
+networks:
+  default:
+    name: ficus-device-networks
+    driver: bridge
